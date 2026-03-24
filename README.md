@@ -1,52 +1,159 @@
-# 🏥 Predicción de Reingreso Hospitalario en Pacientes Diabéticos
+# 🏥 Hospital Readmission Predictor — Diabetic Patients
 
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
-![Random Forest](https://img.shields.io/badge/Model-Random_Forest-green)
-![SMOTE](https://img.shields.io/badge/Imbalanced_Data-SMOTE-orange)
-![Status](https://img.shields.io/badge/Focus-Healthcare_KPI-red)
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://python.org)
+[![Model](https://img.shields.io/badge/Model-XGBoost-EC4D37)](https://xgboost.readthedocs.io)
+[![Optimization](https://img.shields.io/badge/HPO-Optuna-5A67D8)](https://optuna.org)
+[![Interpretability](https://img.shields.io/badge/XAI-SHAP-orange)](https://shap.readthedocs.io)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-Este proyecto aborda uno de los problemas más costosos en la gestión hospitalaria: el **reingreso de pacientes** (Readmission) antes de los 30 días. Utilizando un dataset clínico de 10 años (1999-2008), se desarrolló un modelo predictivo para identificar pacientes de alto riesgo y optimizar la asignación de recursos médicos.
+> **Predicting which diabetic patients are at high risk of readmission within 30 days of discharge** — with a clinical focus on minimizing missed cases over false alarms.
 
-## 🎯 Contexto y Problema de Negocio
-Un reingreso hospitalario temprano suele indicar una falla en el tratamiento inicial o en el seguimiento post-alta.
-* **Objetivo:** Predecir si un paciente diabético será readmitido en menos de 30 días.
-* **Impacto:** Permitir al personal médico intervenir preventivamente en pacientes de alto riesgo antes de darles el alta.
+---
 
-## ⚙️ Metodología Técnica y Clínica
+## 🎯 Business Problem
 
-### 1. Limpieza con Criterio Médico
-Se realizó un preprocesamiento riguroso guiado por lógica clínica:
-* **Filtrado de Cohorte:** Se excluyeron registros de pacientes con alta por fallecimiento o traslado a hospicio (*Hospice*), ya que el reingreso es imposible en estos casos.
-* **Manejo de Datos Faltantes:** Eliminación de variables con >50% de nulidad (`weight`, `payer_code`) y imputación estratégica.
+Early hospital readmission is one of the most expensive and preventable problems in healthcare management. In the US alone, diabetic patient readmissions cost over **$2.5 billion annually**.
 
-### 2. Ingeniería de Características (Feature Engineering)
-* **Agrupación de CIE-9:** Se simplificaron cientos de códigos de diagnóstico en categorías manejables.
-* **Historial del Paciente:** Se dio peso a variables como `number_inpatient` (visitas previas) y `time_in_hospital`.
-* **Interacción de Medicamentos:** Análisis de cambios en la medicación (`change`) y uso de insulina.
+A readmission within 30 days often signals a failure in the initial treatment or post-discharge follow-up. This model gives clinical staff a tool to **identify high-risk patients before discharge** — enabling proactive intervention rather than reactive treatment.
 
-### 3. Manejo de Desbalance de Clases (SMOTE) ⚖️
-Dado que los casos de reingreso positivo eran minoría, se aplicó **SMOTE (Synthetic Minority Over-sampling Technique)**.
-* Esto generó datos sintéticos para la clase minoritaria, evitando que el modelo tuviera un sesgo hacia la clase mayoritaria (No Reingreso) y mejorando la sensibilidad del diagnóstico.
+**The core decision:** In a context where a false negative (missed high-risk patient) has direct human consequences, which metric do you optimize — and why?
 
-### 4. Modelado
-Se implementó un **Random Forest Classifier** optimizado mediante **GridSearchCV**.
-* **Métrica Clave:** Se priorizó el **Recall (Sensibilidad)** sobre el Accuracy, ya que en medicina es más costoso no detectar a un paciente en riesgo (Falso Negativo) que revisar a uno sano (Falso Positivo).
+This project makes that decision explicitly and defends it.
 
-## 📊 Resultados y Hallazgos
-El análisis de importancia de características (*Feature Importance*) reveló los predictores más fuertes:
-1.  **`number_inpatient` (Visitas hospitalarias previas):** El predictor #1. Pacientes con historial de ingresos recientes tienen una probabilidad drásticamente mayor de volver.
-2.  **`num_lab_procedures`:** Indica la complejidad del estado de salud del paciente.
-3.  **`discharge_disposition_id`:** El lugar a donde se envía al paciente (casa, otra clínica) influye en el riesgo.
+---
 
-## 🛠️ Stack Tecnológico
-* **Procesamiento:** Pandas, NumPy.
-* **Machine Learning:** Scikit-Learn (Random Forest, GridSearchCV).
-* **Técnicas Avanzadas:** Imbalanced-learn (SMOTE).
-* **Visualización:** Seaborn, Matplotlib.
+## 📊 Dataset
 
-## 📂 Estructura
-```text
-├── data/                # Dataset clínico
-├── notebooks/           # Notebook con EDA, SMOTE y Modelado
-├── models/              # Modelo Random Forest serializado
+| Attribute | Value |
+|---|---|
+| Source | UCI / Kaggle Diabetes Dataset |
+| Records | 101,766 real hospitalizations |
+| Time span | 1999–2008 (10 years) |
+| Features | 50 clinical variables |
+| Target | Binary: readmitted < 30 days |
+
+---
+
+## ⚙️ Technical Methodology
+
+### 1. Clinically-Guided Data Cleaning
+
+Preprocessing guided by medical logic, not just statistical criteria:
+
+- **Cohort filtering:** Excluded patients discharged to hospice or who died — readmission is impossible in these cases. Including them would introduce irreducible noise.
+- **Missing data:** Dropped variables with >50% nullity (`weight`, `payer_code`). Strategic imputation for the rest.
+- **Duplicate encounters:** One patient, one model input — removed repeated hospitalizations to avoid data leakage.
+
+### 2. Feature Engineering
+
+- **ICD-9 grouping:** Simplified hundreds of diagnostic codes into 9 clinically meaningful categories (circulatory, respiratory, digestive, etc.)
+- **HL7 discharge encoding:** Standardized discharge disposition codes following HL7 healthcare data standards
+- **Patient history features:** Weighted `number_inpatient` (prior visits) and `time_in_hospital` as strong readmission signals
+- **Medication interaction:** Analyzed `change` (medication adjustment) and insulin usage as clinical indicators
+
+### 3. Class Imbalance Handling
+
+Readmission-positive cases were a minority class. Applied **SMOTE (Synthetic Minority Over-sampling Technique)** to generate synthetic samples for the minority class — preventing model bias toward predicting "no readmission" and improving clinical sensitivity.
+
+### 4. Modeling & Optimization
+
+- **Algorithm:** XGBoost Classifier
+- **Hyperparameter optimization:** Bayesian search with **Optuna** (100 trials)
+- **Primary metric:** **Recall** — in medicine, missing a high-risk patient (False Negative) is more costly than flagging a low-risk one (False Positive)
+
+### 5. Threshold Tuning — The Key Clinical Decision
+
+| Threshold | High-Risk Cases Detected | False Positives |
+|---|---|---|
+| 0.50 (default) | Baseline | Lower |
+| **0.20 (chosen)** | **+1,650 additional cases** | Higher |
+
+**Chosen threshold: 0.20** — accepting more false positives to ensure high-risk patients aren't sent home without intervention.
+
+### 6. Interpretability with SHAP
+
+SHAP values reveal *why* the model makes each prediction, enabling clinical staff to understand and trust the output:
+
+- `number_inpatient` → strongest predictor (prior hospitalizations)
+- `num_lab_procedures` → proxy for patient complexity
+- `discharge_disposition_id` → where the patient goes after discharge significantly affects risk
+
+---
+
+## 📈 Results
+
+- **+1,650 high-risk cases detected** that a standard 0.5 threshold would have missed
+- Clinically defensible recall-precision tradeoff with documented justification
+- Model serialized and ready for API deployment
+
+---
+
+## 🗂️ Project Structure
+
+```
+hospital-readmission-prediction-diabetes/
+├── data/
+│   ├── raw/                    # Original clinical dataset
+│   └── processed/              # Cleaned and feature-engineered data
+├── notebooks/
+│   └── eda_modeling.ipynb      # Full EDA, SMOTE, modeling pipeline
+├── src/
+│   └── features/               # Feature engineering scripts
+├── models/
+│   └── xgb_readmission.joblib  # Serialized production model
+├── reports/
+│   └── figures/                # SHAP plots, confusion matrices
+├── static/                     # App assets
+├── app.py                      # Streamlit inference app
+├── train_model_production.py   # Production training script
+├── requirements.txt
 └── README.md
+```
+
+---
+
+## 🚀 Quick Start
+
+```bash
+# Clone the repo
+git clone https://github.com/AlexSc97/hospital-readmission-prediction-diabetes.git
+cd hospital-readmission-prediction-diabetes
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the app
+streamlit run app.py
+
+# Or retrain the model
+python train_model_production.py
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Category | Tools |
+|---|---|
+| **Data Processing** | Pandas · NumPy |
+| **Machine Learning** | Scikit-Learn · XGBoost |
+| **Hyperparameter Optimization** | Optuna |
+| **Imbalanced Data** | imbalanced-learn (SMOTE) |
+| **Explainability** | SHAP |
+| **Visualization** | Seaborn · Matplotlib |
+| **App** | Streamlit |
+| **Serialization** | joblib |
+
+---
+
+## 💡 Key Takeaways
+
+This project demonstrates that good ML in healthcare isn't about achieving the highest accuracy — it's about making **informed decisions on which errors are acceptable**.
+
+The choice to lower the classification threshold from 0.5 to 0.2 wasn't arbitrary: it was a deliberate tradeoff between clinical risk (missing a high-risk patient) and operational cost (additional reviews for flagged low-risk patients). That kind of decision requires domain knowledge, not just technical skill.
+
+---
+
+## License
+
+[MIT](LICENSE) — Free to use and adapt with attribution.
